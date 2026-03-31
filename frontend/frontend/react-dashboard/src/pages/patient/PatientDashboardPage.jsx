@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import DashboardShell from '../../components/DashboardShell';
-import api from '../../lib/api';
+import { db } from '../../lib/supabase';
 
 export default function PatientDashboardPage() {
   const [selectedPatientId, setSelectedPatientId] = useState(null);

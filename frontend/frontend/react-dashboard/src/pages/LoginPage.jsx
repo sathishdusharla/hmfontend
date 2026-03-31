@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../lib/api';
+import { db } from '../lib/supabase';
 
 const DEMO_CREDENTIALS = [
   { role: 'ram', password: 'password', label: 'Admin', gradient: 'from-purple-500 to-indigo-600', bg: 'bg-purple-50',
@@ -32,26 +32,17 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/login', {
-        username: form.username.trim().toLowerCase(),
-        password: form.password,
-      });
-      localStorage.setItem('meditrust_token', data.token);
-      localStorage.setItem('meditrust_role', data.role);
-      localStorage.setItem('meditrust_user', data.username);
-      localStorage.setItem('meditrust_entity_id', data.linkedEntityId ?? '');
+      const user = await db.loginUser(form.username.trim().toLowerCase(), form.password);
+      localStorage.setItem('meditrust_user', user.email);
+      localStorage.setItem('meditrust_role', user.role);
+      localStorage.setItem('meditrust_entity_id', user.entity_id ?? '');
 
-      if (data.role === 'PATIENT') navigate('/patient');
-      else if (data.role === 'DOCTOR') navigate('/doctor');
-      else if (data.role === 'ADMIN') navigate('/admin');
-      else setError('Unknown role: ' + data.role);
+      if (user.role === 'PATIENT') navigate('/patient');
+      else if (user.role === 'DOCTOR') navigate('/doctor');
+      else if (user.role === 'ADMIN') navigate('/admin');
+      else setError('Unknown role: ' + user.role);
     } catch (err) {
-      const status = err?.response?.status;
-      if (status === 403) {
-        setError('Access forbidden. Backend may be restarting. Try again in a few seconds.');
-      } else {
-        setError(err?.response?.data?.message || 'Login failed. Check username and password.');
-      }
+      setError(err?.message || 'Login failed. Check email and password.');
     } finally {
       setLoading(false);
     }

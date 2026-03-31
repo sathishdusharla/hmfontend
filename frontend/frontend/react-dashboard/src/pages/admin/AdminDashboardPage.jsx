@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import DashboardShell from '../../components/DashboardShell';
-import api from '../../lib/api';
+import { db } from '../../lib/supabase';
 
 function Badge({ text, variant = 'gray' }) {
   const cls = {

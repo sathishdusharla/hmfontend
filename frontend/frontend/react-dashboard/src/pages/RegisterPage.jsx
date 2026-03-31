@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../lib/api';
+import { db } from '../lib/supabase';
 
 export default function RegisterPage() {
   const specializationOptions = [

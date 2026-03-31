@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import api from '../lib/api';
+import { db } from '../lib/supabase';
 
 const starterMessage = {
   role: 'assistant',
