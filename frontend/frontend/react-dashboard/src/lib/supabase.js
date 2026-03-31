@@ -20,7 +20,7 @@ export const db = {
     let data = null;
     let error = null;
 
-    // Strategy 1: Search by username
+    // Strategy 1: Search by username (skip if column doesn't exist)
     try {
       const result = await supabase
         .from('users')
@@ -32,7 +32,7 @@ export const db = {
         console.log('✓ Found user by username:', emailOrUsername);
       }
     } catch (err) {
-      console.log('Username search failed, trying email...');
+      // Username column might not exist, silently continue
     }
 
     // Strategy 2: If username search failed, try email
@@ -226,7 +226,7 @@ export const db = {
       .from('doctors')
       .select('*')
       .eq('hospital_id', hospitalId)
-      .order('name');
+      .order('full_name');
     return data || [];
   },
 
@@ -330,7 +330,7 @@ export const db = {
     const { data, error } = await supabase
       .from('doctors')
       .select('*')
-      .order('name');
+      .order('full_name');
     return data || [];
   },
 
@@ -363,7 +363,7 @@ export const db = {
     const { data, error } = await supabase
       .from('patients')
       .select('*')
-      .order('name');
+      .order('full_name');
     return data || [];
   },
 
