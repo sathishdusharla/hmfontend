@@ -20,22 +20,7 @@ export const db = {
     let data = null;
     let error = null;
 
-    // Strategy 1: Search by username (skip if column doesn't exist)
-    try {
-      const result = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', emailOrUsername);
-      
-      if (result.data && result.data.length > 0) {
-        data = result.data[0];
-        console.log('✓ Found user by username:', emailOrUsername);
-      }
-    } catch (err) {
-      // Username column might not exist, silently continue
-    }
-
-    // Strategy 2: If username search failed, try email
+    // Strategy 1: Search by email
     if (!data) {
       try {
         const result = await supabase
@@ -52,7 +37,7 @@ export const db = {
       }
     }
 
-    // Strategy 3: If still not found, try case-insensitive email match
+    // Strategy 2: If still not found, try case-insensitive email match
     if (!data) {
       try {
         const result = await supabase
@@ -78,7 +63,7 @@ export const db = {
       throw new Error('User not found');
     }
 
-    console.log('✓ Found user:', { id: data.id, email: data.email, username: data.username, role: data.role });
+    console.log('✓ Found user:', { id: data.id, email: data.email, name: data.name, role: data.role });
 
     // In production, use bcrypt. For now, simple comparison
     if (data.password !== password) {
@@ -128,7 +113,7 @@ export const db = {
       }
     }
 
-    console.log('✅ Login successful:', { userId: data.id, email: data.email, username: data.username, role: data.role, entityId });
+    console.log('✅ Login successful:', { userId: data.id, email: data.email, name: data.name, role: data.role, entityId });
 
     return {
       id: data.id,
@@ -379,7 +364,6 @@ export const db = {
       .from('users')
       .insert([{
         email: userData.email,
-        username: userData.username,
         password: userData.password,
         name: userData.full_name,
         role: userData.role,
@@ -531,7 +515,6 @@ export const db = {
     // First create user record
     const userData = {
       email: patientData.email,
-      username: patientData.username,
       password: patientData.password,
       name: patientData.fullName,
       role: 'PATIENT',
