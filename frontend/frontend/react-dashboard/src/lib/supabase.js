@@ -16,30 +16,69 @@ export const db = {
   async loginUser(emailOrUsername, password) {
     console.log('🔍 Attempting login with:', emailOrUsername);
     
-    // Search by email first
-    let { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', emailOrUsername)
-      .single();
+    // Try multiple search strategies
+    let data = null;
+    let error = null;
 
-    if (!data && !error) {
-      // Try searching by username if email not found
+    // Strategy 1: Search by username
+    try {
       const result = await supabase
         .from('users')
         .select('*')
-        .eq('username', emailOrUsername)
-        .single();
-      data = result.data;
-      error = result.error;
+        .eq('username', emailOrUsername);
+      
+      if (result.data && result.data.length > 0) {
+        data = result.data[0];
+        console.log('✓ Found user by username:', emailOrUsername);
+      }
+    } catch (err) {
+      console.log('Username search failed, trying email...');
     }
 
-    if (error || !data) {
-      console.error('❌ User lookup error:', error);
+    // Strategy 2: If username search failed, try email
+    if (!data) {
+      try {
+        const result = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', emailOrUsername);
+        
+        if (result.data && result.data.length > 0) {
+          data = result.data[0];
+          console.log('✓ Found user by email:', emailOrUsername);
+        }
+      } catch (err) {
+        console.log('Email search failed');
+      }
+    }
+
+    // Strategy 3: If still not found, try case-insensitive email match
+    if (!data) {
+      try {
+        const result = await supabase
+          .from('users')
+          .select('*');
+        
+        // Find user with matching email (case-insensitive)
+        const foundUser = result.data?.find(u => 
+          u.email?.toLowerCase().includes(emailOrUsername.toLowerCase())
+        );
+        
+        if (foundUser) {
+          data = foundUser;
+          console.log('✓ Found user by fuzzy email match:', foundUser.email);
+        }
+      } catch (err) {
+        console.log('Fuzzy search failed');
+      }
+    }
+
+    if (!data) {
+      console.error('❌ User not found with any search strategy');
       throw new Error('User not found');
     }
 
-    console.log('✓ Found user:', { id: data.id, email: data.email, role: data.role });
+    console.log('✓ Found user:', { id: data.id, email: data.email, username: data.username, role: data.role });
 
     // In production, use bcrypt. For now, simple comparison
     if (data.password !== password) {
@@ -89,7 +128,7 @@ export const db = {
       }
     }
 
-    console.log('✅ Login successful:', { userId: data.id, email: data.email, role: data.role, entityId });
+    console.log('✅ Login successful:', { userId: data.id, email: data.email, username: data.username, role: data.role, entityId });
 
     return {
       id: data.id,
