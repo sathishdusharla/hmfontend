@@ -58,18 +58,14 @@ export default function ChatbotWidget() {
 
     try {
       const context = 'User is asking about ' + text.substring(0, 30);
-      const res = await api.post('/chatbot/message', {
-        message: text,
-        role: userRole,
-        context: context
-      });
-      const reply = res?.data?.reply || 'No response returned.';
+      const res = await db.sendChatbotMessage(text, userRole, context);
+      const reply = res?.reply || 'No response returned.';
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     } catch (err) {
-      const backendError = err?.response?.data?.message;
+      const error = err?.message || 'I\'m having trouble connecting right now. Please try again later.';
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', text: backendError || 'I\'m having trouble connecting right now. Please try again later.' },
+        { role: 'assistant', text: error },
       ]);
     } finally {
       setLoading(false);

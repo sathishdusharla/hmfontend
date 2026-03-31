@@ -40,7 +40,7 @@ export default function RegisterPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/hospitals').then((r) => setHospitals(r.data || [])).catch(() => setHospitals([]));
+    db.getHospitals().then((hospitals) => setHospitals(hospitals || [])).catch(() => setHospitals([]));
   }, []);
 
   const uniqueHospitals = Array.from(
@@ -58,26 +58,26 @@ export default function RegisterPage() {
 
     try {
       setLoading(true);
-      await api.post('/auth/register', {
-        fullName: form.fullName,
+      await db.registerUser({
+        full_name: form.fullName,
         phone: form.phone,
-        dateOfBirth: form.dateOfBirth,
+        date_of_birth: form.dateOfBirth,
         gender: form.gender,
         address: form.address,
         email: form.email,
         username: form.username,
         password: form.password,
-        role: form.role,
-        hospitalId: form.hospitalId ? Number(form.hospitalId) : null,
+        role: form.role.toUpperCase(),
+        hospital_id: form.hospitalId ? form.hospitalId : null,
         specialization: form.specialization,
-        licenseNumber: form.licenseNumber,
-        emergencyContact: form.emergencyContact,
+        license_number: form.licenseNumber,
+        emergency_contact: form.emergencyContact,
       });
 
       setMessage('Registration successful! Redirecting to login...');
       setTimeout(() => navigate('/login'), 1500);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Registration failed. Please try again.');
+      setError(err?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }

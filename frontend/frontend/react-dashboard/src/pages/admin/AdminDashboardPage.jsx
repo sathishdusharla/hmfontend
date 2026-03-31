@@ -65,25 +65,25 @@ export default function AdminDashboardPage() {
     setError('');
     try {
       const [ov, h, d, a, c, an, p, ap] = await Promise.all([
-        api.get('/admin/system-overview'),
-        api.get('/admin/hospitals'),
-        api.get('/admin/doctors'),
-        api.get('/admin/alerts'),
-        api.get('/admin/complaints'),
-        api.get('/admin/analytics'),
-        api.get('/admin/patients'),
-        api.get('/admin/appointments'),
+        db.getSystemOverview(),
+        db.getAdminHospitals(),
+        db.getAdminDoctors(),
+        db.getAdminAlerts(),
+        db.getAdminComplaints(),
+        db.getAdminAnalytics(),
+        db.getAdminPatients(),
+        db.getAllAppointments(),
       ]);
-      setOverview(ov.data);
-      setHospitals(h.data || []);
-      setDoctors(d.data || []);
-      setAlerts(a.data || []);
-      setComplaints(c.data || []);
-      setAnalytics(an.data);
-      setPatients(p.data || []);
-      setAllAppointments(ap.data || []);
+      setOverview(ov);
+      setHospitals(h || []);
+      setDoctors(d || []);
+      setAlerts(a || []);
+      setComplaints(c || []);
+      setAnalytics(an);
+      setPatients(p || []);
+      setAllAppointments(ap || []);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to load dashboard data. Check that the backend is running.');
+      setError(err?.message || 'Failed to load dashboard data.');
     } finally {
       setLoading(false);
     }
@@ -91,41 +91,41 @@ export default function AdminDashboardPage() {
 
   async function resolveAlert(id) {
     try {
-      await api.put(`/admin/alerts/${id}/resolve`);
+      await db.resolveAlert(id);
       setActionMsg('Alert resolved.');
       await loadData();
     } catch (err) {
-      setActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to resolve alert.'));
+      setActionMsg('✗ ' + (err?.message || 'Failed to resolve alert.'));
     }
   }
 
   async function resolveComplaint(id) {
     try {
-      await api.put(`/admin/complaints/${id}/resolve`);
+      await db.resolveComplaint(id);
       setActionMsg('Complaint resolved.');
       await loadData();
     } catch (err) {
-      setActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to resolve complaint.'));
+      setActionMsg('✗ ' + (err?.message || 'Failed to resolve complaint.'));
     }
   }
 
   async function approveDoctor(id) {
     try {
-      await api.put(`/admin/doctors/${id}/approve`);
+      await db.approveDoctor(id);
       setActionMsg('Doctor approved.');
       await loadData();
     } catch (err) {
-      setActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to approve doctor.'));
+      setActionMsg('✗ ' + (err?.message || 'Failed to approve doctor.'));
     }
   }
 
   async function approveHospital(id) {
     try {
-      await api.put(`/admin/hospitals/${id}/approve`);
+      await db.approveHospital(id);
       setActionMsg('Hospital approved.');
       await loadData();
     } catch (err) {
-      setActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to approve hospital.'));
+      setActionMsg('✗ ' + (err?.message || 'Failed to approve hospital.'));
     }
   }
 
@@ -136,7 +136,7 @@ export default function AdminDashboardPage() {
       return;
     }
     try {
-      await api.post('/admin/patients', patientForm);
+      await db.createPatient(patientForm);
       setActionMsg('Patient created successfully.');
       setPatientForm({
         fullName: '',
@@ -150,18 +150,18 @@ export default function AdminDashboardPage() {
       });
       await loadData();
     } catch (err) {
-      setActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to create patient.'));
+      setActionMsg('✗ ' + (err?.message || 'Failed to create patient.'));
     }
   }
 
   async function deletePatient(id) {
     if (!confirm('Are you sure you want to delete this patient?')) return;
     try {
-      await api.delete(`/admin/patients/${id}`);
+      await db.deletePatient(id);
       setActionMsg('Patient deleted successfully.');
       await loadData();
     } catch (err) {
-      setActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to delete patient.'));
+      setActionMsg('✗ ' + (err?.message || 'Failed to delete patient.'));
     }
   }
 
@@ -172,7 +172,13 @@ export default function AdminDashboardPage() {
       return;
     }
     try {
-      await api.post('/admin/appointments', bookForm);
+      await db.createAppointment({
+        patient_id: bookForm.patientId,
+        doctor_id: bookForm.doctorId,
+        hospital_id: bookForm.hospitalId,
+        appointment_date: bookForm.appointmentDateTime,
+        symptoms_or_disease: bookForm.symptomsOrDisease,
+      });
       setActionMsg('Appointment booked successfully.');
       setBookForm({
         patientId: '',
@@ -183,7 +189,7 @@ export default function AdminDashboardPage() {
       });
       await loadData();
     } catch (err) {
-      setActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to book appointment.'));
+      setActionMsg('✗ ' + (err?.message || 'Failed to book appointment.'));
     }
   }
 

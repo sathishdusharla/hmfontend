@@ -31,7 +31,7 @@ export default function PatientDashboardPage() {
 
   useEffect(() => {
     initializePatientContext();
-    api.get('/hospitals').then((r) => setHospitals(r.data || [])).catch(() => {});
+    db.getHospitals().then((hospitals) => setHospitals(hospitals || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -45,8 +45,8 @@ export default function PatientDashboardPage() {
 
   async function initializePatientContext() {
     try {
-      const { data } = await api.get('/patients');
-      setPatients(data || []);
+      const patients = await db.getPatients();
+      setPatients(patients || []);
     } catch {
       // non-critical, patients list only used for the switcher in booking form
     }
@@ -65,12 +65,10 @@ export default function PatientDashboardPage() {
   async function fetchDayPatientNumber(appointmentDateTime) {
     try {
       const normalizedDateTime = appointmentDateTime.length === 16
-        ? `${appointmentDateTime}:00`
-        : appointmentDateTime;
-      const { data } = await api.get('/appointments/day-patient-number', {
-        params: { appointmentDateTime: normalizedDateTime },
-      });
-      setDayPatientNumber(data?.dayPatientNumber ?? null);
+        ? `${appointmentDateTime.split('T')[0]}`
+        : appointmentDateTime.split('T')[0];
+      const appointments = await db.getAppointmentsByDate(normalizedDateTime);
+      setDayPatientNumber(appointments?.length ?? null);
     } catch {
       setDayPatientNumber(null);
     }
@@ -79,23 +77,23 @@ export default function PatientDashboardPage() {
   async function loadAll(patientId) {
     setLoadError('');
     try {
-      const [overviewRes, appRes, presRes, historyRes, labTestsRes] = await Promise.all([
-        api.get(`/patient/${patientId}/dashboard`),
-        api.get(`/patient/${patientId}/appointments`),
-        api.get(`/patient/${patientId}/prescriptions`),
-        api.get(`/patient/${patientId}/dashboard-history`),
-        api.get(`/patient/${patientId}/lab-tests`)
+      const [overview, appointments, prescriptions, history, labTests] = await Promise.all([
+        db.getPatient(patientId),
+        db.getPatientAppointments(patientId),
+        db.getPatientPrescriptions(patientId),
+        db.getPatientDashboardHistory(patientId),
+        db.getPatientLabTests(patientId)
       ]);
-      setOverview(overviewRes.data);
+      setOverview(overview);
       const dedupedAppointments = Array.from(
-        new Map((appRes.data || []).map((item) => [item.id, item])).values()
+        new Map((appointments || []).map((item) => [item.id, item])).values()
       );
       setAppointments(dedupedAppointments);
-      setPrescriptions(presRes.data || []);
-      setPatientLabTests(labTestsRes.data || []);
-      setHistory(historyRes.data || { consultations: [], prescriptions: [] });
+      setPrescriptions(prescriptions || []);
+      setPatientLabTests(labTests || []);
+      setHistory(history || { consultations: [], prescriptions: [] });
     } catch (err) {
-      setLoadError(err?.response?.data?.message || 'Failed to load patient data.');
+      setLoadError(err?.message || 'Failed to load patient data.');
     }
   }
 
@@ -105,8 +103,8 @@ export default function PatientDashboardPage() {
     if (!hospitalId) return;
     setLoadingDoctors(true);
     try {
-      const res = await api.get(`/doctors/by-hospital/${hospitalId}`);
-      setDoctors(res.data || []);
+      const doctors = await db.getDoctorsByHospital(hospitalId);
+      setDoctors(doctors || []);
     } catch {
       setDoctors([]);
     } finally {
@@ -132,13 +130,14 @@ export default function PatientDashboardPage() {
     try {
       setIsSubmittingAppointment(true);
       const resolvedPatientId = Number(selectedPatientId || 1);
-      await api.post('/patient/appointments', {
-        patientId: resolvedPatientId,
-        hospitalId: Number(form.hospitalId),
-        doctorId: Number(form.doctorId),
-        appointmentDateTime: normalizedDateTime,
-        symptomsOrDisease: form.symptomsOrDisease,
-        consultationFee: form.consultationFee ? Number(form.consultationFee) : null,
+      await db.createAppointment({
+        patient_id: resolvedPatientId,
+        hospital_id: form.hospitalId,
+        doctor_id: form.doctorId,
+        appointment_date: normalizedDateTime.split('T')[0],
+        appointment_time: normalizedDateTime.split('T')[1],
+        symptoms_or_disease: form.symptomsOrDisease,
+        consultation_fee: form.consultationFee ? Number(form.consultationFee) : null,
       });
       await loadAll(resolvedPatientId);
       setAppointmentSuccess('Appointment request submitted successfully.');
@@ -147,7 +146,7 @@ export default function PatientDashboardPage() {
       setDoctors([]);
       setTab('appointments');
     } catch (err) {
-      setAppointmentError(err?.response?.data?.message || 'Failed to book appointment. Please try again.');
+      setAppointmentError(err?.message || 'Failed to book appointment. Please try again.');
     } finally {
       setIsSubmittingAppointment(false);
     }
@@ -159,17 +158,18 @@ export default function PatientDashboardPage() {
     setComplaintError('');
     const resolvedPatientId = Number(selectedPatientId || 1);
     try {
-      await api.post('/patient/complaints', {
-        ...complaint,
-        patientId: resolvedPatientId,
-        consultationId: complaint.consultationId || null,
-        prescriptionId: complaint.prescriptionId || null,
-        reportedAmount: complaint.reportedAmount ? Number(complaint.reportedAmount) : null
+      await db.createComplaint({
+        patient_id: resolvedPatientId,
+        consultation_id: complaint.consultationId || null,
+        prescription_id: complaint.prescriptionId || null,
+        complaint_type: complaint.complaintType,
+        description: complaint.description,
+        reported_amount: complaint.reportedAmount ? Number(complaint.reportedAmount) : null
       });
       setComplaint({ consultationId: '', prescriptionId: '', complaintType: 'HIGH_CONSULTATION_FEE', description: '', reportedAmount: '' });
       setComplaintSuccess('Complaint submitted for admin review.');
     } catch (err) {
-      setComplaintError(err?.response?.data?.message || 'Failed to submit complaint.');
+      setComplaintError(err?.message || 'Failed to submit complaint.');
     }
   }
 
@@ -185,14 +185,7 @@ export default function PatientDashboardPage() {
 
     try {
       setUploadMsg('Uploading...');
-      const formData = new FormData();
-      formData.append('file', uploadFile.file);
-
-      await api.post(`/patient/lab-tests/${labTestId}/upload`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      await db.uploadLabTestReport(labTestId, uploadFile.file);
 
       setUploadMsg('Report uploaded successfully!');
       setUploadFile({ labTestId: null, file: null });
@@ -203,7 +196,7 @@ export default function PatientDashboardPage() {
       // Clear message after 3 seconds
       setTimeout(() => setUploadMsg(''), 3000);
     } catch (err) {
-      setUploadMsg(err?.response?.data?.message || 'Failed to upload report. Please try again.');
+      setUploadMsg(err?.message || 'Failed to upload report. Please try again.');
     }
   }
 

@@ -35,30 +35,30 @@ export default function DoctorDashboardPage() {
 
   useEffect(() => {
     loadData();
-    api.get('/medicines').then((r) => setMedicines(Array.isArray(r.data) ? r.data : [])).catch(() => setMedicines([]));
+    db.getMedicines().then((r) => setMedicines(Array.isArray(r) ? r : [])).catch(() => setMedicines([]));
   }, []);
 
   async function loadData() {
     try {
       const [ov, ap, tt, ec] = await Promise.all([
-        api.get(`/doctor/${DOCTOR_ID}/dashboard`),
-        api.get(`/doctor/${DOCTOR_ID}/appointments`),
-        api.get(`/doctor/${DOCTOR_ID}/treated-patients`),
-        api.get(`/doctor/${DOCTOR_ID}/prescription-eligible-consultations`),
+        db.getDoctorDashboard(DOCTOR_ID),
+        db.getDoctorAppointments(DOCTOR_ID),
+        db.getDoctorTreatedToday(DOCTOR_ID),
+        db.getDoctorEligibleConsultations(DOCTOR_ID),
       ]);
-      setOverview(ov.data);
-      setAppointments(ap.data || []);
-      setTreatedToday(tt.data || []);
-      setEligibleConsultations(ec.data || []);
+      setOverview(ov);
+      setAppointments(ap || []);
+      setTreatedToday(tt || []);
+      setEligibleConsultations(ec || []);
 
       // Fetch lab tests for each eligible consultation
       const allLabTests = [];
-      if (ec.data && ec.data.length > 0) {
-        for (const consultation of ec.data) {
+      if (ec && ec.length > 0) {
+        for (const consultation of ec) {
           try {
-            const { data } = await api.get(`/doctor/${DOCTOR_ID}/consultations/${consultation.consultationId}/lab-tests`);
-            if (data && Array.isArray(data)) {
-              allLabTests.push(...data);
+            const labTests = await db.getConsultationLabTests(DOCTOR_ID, consultation.id);
+            if (labTests && Array.isArray(labTests)) {
+              allLabTests.push(...labTests);
             }
           } catch {
             // Skip if lab tests endpoint fails for this consultation
@@ -79,8 +79,8 @@ export default function DoctorDashboardPage() {
     setAppointmentActionMsg('');
     setLoadingAppointmentPatient(true);
     try {
-      const patientId = appointment.patientId || appointment?.patient?.id;
-      const { data } = await api.get(`/doctor/patients/${patientId}`);
+      const patientId = appointment.patient_id || appointment?.patient?.id;
+      const data = await db.getPatientDetailsForDoctor(patientId);
       setSelectedPatientDetails(data);
     } catch {
       setSelectedPatientDetails(null);
@@ -109,8 +109,8 @@ export default function DoctorDashboardPage() {
     }
 
     try {
-      const { data } = await api.post(`/doctor/appointments/${selectedAppointmentId}/treat`);
-      const consultationId = data?.consultationId;
+      const result = await db.markAppointmentTreated(selectedAppointmentId);
+      const consultationId = result?.consultationId;
       if (consultationId) {
         setDiagnosis((prev) => ({ ...prev, consultationId: String(consultationId) }));
         setAppointmentActionMsg(`✓ Appointment #${selectedAppointmentId} marked as treated. Consultation #${consultationId} created.`);
@@ -120,7 +120,7 @@ export default function DoctorDashboardPage() {
       await loadData();
       await openAppointment(selected);
     } catch (err) {
-      setAppointmentActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to mark appointment as treated.'));
+      setAppointmentActionMsg('✗ ' + (err?.message || 'Failed to mark appointment as treated.'));
     }
   }
 
@@ -128,7 +128,7 @@ export default function DoctorDashboardPage() {
     setPatientActionMsg('');
     if (!patientId) return;
     try {
-      const { data } = await api.get(`/doctor/patients/${patientId}`);
+      const data = await db.getPatientDetailsForDoctor(patientId);
       setPatientDetails(data);
     } catch { setPatientDetails(null); }
   }
@@ -148,12 +148,12 @@ export default function DoctorDashboardPage() {
     }
 
     try {
-      await api.put(`/appointments/${targetAppointment.id}/status`, null, { params: { status: 'COMPLETED' } });
+      await db.updateAppointmentStatus(targetAppointment.id, 'COMPLETED');
       setPatientActionMsg(`✓ Treatment completed for appointment #${targetAppointment.id}.`);
       await loadData();
       await loadPatient();
     } catch (err) {
-      setPatientActionMsg('✗ ' + (err?.response?.data?.message || 'Failed to mark treatment completed.'));
+      setPatientActionMsg('✗ ' + (err?.message || 'Failed to mark treatment completed.'));
     }
   }
 
@@ -161,16 +161,13 @@ export default function DoctorDashboardPage() {
     e.preventDefault();
     setDiagMsg('');
     try {
-      await api.put(`/doctor/consultations/${diagnosis.consultationId}/diagnosis`, {
-        diagnosis: diagnosis.diagnosis,
-        notes: diagnosis.notes,
-      });
+      await db.submitDiagnosis(diagnosis.consultationId, diagnosis.diagnosis, diagnosis.notes);
       setDiagMsg('✓ Diagnosis saved successfully.');
       setPrescConsultationId(diagnosis.consultationId);
       setDiagnosis({ consultationId: '', diagnosis: '', notes: '' });
       await loadData();
     } catch (err) {
-      setDiagMsg('✗ ' + (err?.response?.data?.message || 'Failed to save.'));
+      setDiagMsg('✗ ' + (err?.message || 'Failed to save.'));
     }
   }
 
@@ -188,18 +185,14 @@ export default function DoctorDashboardPage() {
       return;
     }
     try {
-      const { data } = await api.post('/doctor/prescriptions', {
-        consultationId: Number(prescConsultationId),
-        medicineIds: selectedMeds.map((id) => Number(id)).filter((id) => Number.isFinite(id)),
-        notes: prescNotes,
-      });
+      const data = await db.submitPrescription(Number(prescConsultationId), selectedMeds.map((id) => Number(id)).filter((id) => Number.isFinite(id)), prescNotes);
       setPrescResult(data);
       setSelectedMeds([]);
       setPrescNotes('');
       setPrescConsultationId('');
       loadData();
     } catch (err) {
-      setPrescError(err?.response?.data?.message || 'Failed to save prescription.');
+      setPrescError(err?.message || 'Failed to save prescription.');
     }
   }
 
@@ -211,16 +204,12 @@ export default function DoctorDashboardPage() {
       return;
     }
     try {
-      const { data } = await api.post('/doctor/lab-tests', {
-        consultationId: Number(labTestForm.consultationId),
-        testName: labTestForm.testName,
-        instructions: labTestForm.instructions,
-      });
+      await db.submitLabTest(Number(labTestForm.consultationId), labTestForm.testName, labTestForm.instructions);
       setLabTestMsg('✓ Lab test ordered successfully.');
       setLabTestForm({ consultationId: '', testName: '', instructions: '' });
       await loadData();
     } catch (err) {
-      setLabTestMsg('✗ ' + (err?.response?.data?.message || 'Failed to order lab test.'));
+      setLabTestMsg('✗ ' + (err?.message || 'Failed to order lab test.'));
     }
   }
 

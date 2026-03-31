@@ -170,6 +170,396 @@ export const db = {
       .eq('appointment_date', date);
     return data || [];
   },
+
+  // Register new user
+  async registerUser(userData) {
+    const { data, error } = await supabase
+      .from('users')
+      .insert([userData])
+      .select();
+    if (error) throw error;
+    return data[0];
+  },
+
+  // Admin operations
+  async getSystemOverview() {
+    // Return a basic overview
+    const [patientCount, doctorCount, hospitalCount] = await Promise.all([
+      supabase.from('patients').select('id'),
+      supabase.from('doctors').select('id'),
+      supabase.from('hospitals').select('id'),
+    ]);
+    return {
+      totalPatients: patientCount.data?.length || 0,
+      totalDoctors: doctorCount.data?.length || 0,
+      totalHospitals: hospitalCount.data?.length || 0,
+    };
+  },
+
+  async getAdminHospitals() {
+    const { data, error } = await supabase
+      .from('hospitals')
+      .select('*')
+      .order('name');
+    return data || [];
+  },
+
+  async getAdminDoctors() {
+    const { data, error } = await supabase
+      .from('doctors')
+      .select('*')
+      .order('name');
+    return data || [];
+  },
+
+  async getAdminAlerts() {
+    const { data, error } = await supabase
+      .from('complaints')
+      .select('*')
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async getAdminComplaints() {
+    const { data, error } = await supabase
+      .from('complaints')
+      .select('*')
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async getAdminAnalytics() {
+    const appointments = await supabase
+      .from('appointments')
+      .select('created_at');
+    return {
+      totalAppointments: appointments.data?.length || 0,
+    };
+  },
+
+  async getAdminPatients() {
+    const { data, error } = await supabase
+      .from('patients')
+      .select('*')
+      .order('name');
+    return data || [];
+  },
+
+  async getAllAppointments() {
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  // Admin mutation operations
+  async resolveAlert(id) {
+    const { data, error } = await supabase
+      .from('complaints')
+      .update({ status: 'RESOLVED' })
+      .eq('id', id);
+    if (error) throw error;
+    return data;
+  },
+
+  async resolveComplaint(id) {
+    const { data, error } = await supabase
+      .from('complaints')
+      .update({ status: 'RESOLVED' })
+      .eq('id', id);
+    if (error) throw error;
+    return data;
+  },
+
+  async approveDoctor(id) {
+    const { data, error } = await supabase
+      .from('doctors')
+      .update({ approved: true })
+      .eq('id', id);
+    if (error) throw error;
+    return data;
+  },
+
+  async approveHospital(id) {
+    const { data, error } = await supabase
+      .from('hospitals')
+      .update({ approved: true })
+      .eq('id', id);
+    if (error) throw error;
+    return data;
+  },
+
+  async createPatient(patientData) {
+    // First create user record
+    const userData = {
+      email: patientData.email,
+      username: patientData.username,
+      password: patientData.password,
+      name: patientData.fullName,
+      role: 'PATIENT',
+    };
+    
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .insert([userData])
+      .select();
+    
+    if (userError) throw userError;
+
+    // Then create patient record
+    const { data, error } = await supabase
+      .from('patients')
+      .insert([{
+        user_id: user[0].id,
+        full_name: patientData.fullName,
+        date_of_birth: patientData.dateOfBirth,
+        gender: patientData.gender,
+        phone: patientData.phone,
+        hospital_id: patientData.hospitalId,
+      }])
+      .select();
+    
+    if (error) throw error;
+    return data[0];
+  },
+
+  async deletePatient(id) {
+    // First get the patient to find user_id
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('user_id')
+      .eq('id', id)
+      .single();
+    
+    if (patientError) throw patientError;
+
+    // Delete patient record
+    const { error: deleteError } = await supabase
+      .from('patients')
+      .delete()
+      .eq('id', id);
+    
+    if (deleteError) throw deleteError;
+
+    // Delete user record if it exists
+    if (patient?.user_id) {
+      await supabase
+        .from('users')
+        .delete()
+        .eq('id', patient.user_id);
+    }
+
+    return true;
+  },
+
+  // Doctor operations
+  async getDoctorDashboard(doctorId) {
+    const { data: doctor, error } = await supabase
+      .from('doctors')
+      .select('*')
+      .eq('id', doctorId)
+      .single();
+    return doctor || {};
+  },
+
+  async getDoctorAppointments(doctorId) {
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('doctor_id', doctorId)
+      .order('appointment_date', { ascending: true });
+    return data || [];
+  },
+
+  async getDoctorTreatedToday(doctorId) {
+    // Get appointments treated today
+    const today = new Date().toISOString().split('T')[0];
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('doctor_id', doctorId)
+      .eq('appointment_date', today)
+      .eq('status', 'COMPLETED')
+      .order('appointment_date');
+    return data || [];
+  },
+
+  async getDoctorEligibleConsultations(doctorId) {
+    // Get consultations where diagnosis hasn't been set/completed
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('doctor_id', doctorId)
+      .eq('status', 'COMPLETED')
+      .is('diagnosis', null)
+      .order('appointment_date', { ascending: false });
+    return data || [];
+  },
+
+  async getPatientDetailsForDoctor(patientId) {
+    const { data, error } = await supabase
+      .from('patients')
+      .select('*, appointments(*)')
+      .eq('id', patientId)
+      .single();
+    return data || {};
+  },
+
+  async markAppointmentTreated(appointmentId) {
+    // First mark appointment as completed
+    const { data: appointment, error } = await supabase
+      .from('appointments')
+      .update({ status: 'COMPLETED' })
+      .eq('id', appointmentId)
+      .select();
+    
+    if (error) throw error;
+
+    // Create consultation record if needed
+    const { data: consultation, error: consultError } = await supabase
+      .from('consultations')
+      .insert([{
+        appointment_id: appointmentId,
+        doctor_id: appointment[0]?.doctor_id,
+        patient_id: appointment[0]?.patient_id,
+      }])
+      .select();
+    
+    if (consultError) console.warn('Could not create consultation:', consultError);
+
+    return {
+      appointmentId,
+      consultationId: consultation?.[0]?.id,
+    };
+  },
+
+  async updateAppointmentStatus(appointmentId, status) {
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status })
+      .eq('id', appointmentId)
+      .select();
+    
+    if (error) throw error;
+    return data[0];
+  },
+
+  async submitDiagnosis(consultationId, diagnosis, notes) {
+    const { data, error } = await supabase
+      .from('consultations')
+      .update({ diagnosis, notes })
+      .eq('id', consultationId)
+      .select();
+    
+    if (error) throw error;
+    return data[0];
+  },
+
+  async submitPrescription(consultationId, medicineIds, notes) {
+    const medicines = medicineIds.map((medicineId) => ({
+      consultation_id: consultationId,
+      medicine_id: medicineId,
+      notes,
+    }));
+
+    const { data, error } = await supabase
+      .from('prescriptions')
+      .insert(medicines)
+      .select();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async submitLabTest(consultationId, testName, instructions) {
+    const { data, error } = await supabase
+      .from('lab_tests')
+      .insert([{
+        consultation_id: consultationId,
+        test_name: testName,
+        instructions,
+        status: 'PENDING',
+      }])
+      .select();
+    
+    if (error) throw error;
+    return data[0];
+  },
+
+  async getConsultationLabTests(doctorId, consultationId) {
+    const { data, error } = await supabase
+      .from('lab_tests')
+      .select('*')
+      .eq('consultation_id', consultationId)
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  // Chatbot and messaging
+  async sendChatbotMessage(message, userRole, context) {
+    // Store message in database for history
+    const { data, error } = await supabase
+      .from('chatbot_messages')
+      .insert([{
+        message,
+        user_role: userRole,
+        context,
+        timestamp: new Date().toISOString(),
+      }])
+      .select();
+
+    if (error) console.warn('Failed to store message:', error);
+
+    // For now, return a simple mock response
+    // In production, you could call an actual chatbot API here
+    const mockResponses = {
+      'greeting': 'Hello! How can I assist you with your health today?',
+      'appointment': 'To book an appointment, go to the patient dashboard and select your preferred doctor and time slot.',
+      'prescription': 'You can view your prescriptions in the patient dashboard under the prescriptions tab.',
+      'lab': 'Lab tests can be ordered by your doctor. Check your dashboard for pending lab tests.',
+      'default': 'Thank you for your question. Please contact your healthcare provider for more specific medical advice.',
+    };
+
+    let reply = mockResponses.default;
+    const messageLower = message.toLowerCase();
+    if (messageLower.includes('hello') || messageLower.includes('hi')) reply = mockResponses.greeting;
+    else if (messageLower.includes('appointment')) reply = mockResponses.appointment;
+    else if (messageLower.includes('prescription')) reply = mockResponses.prescription;
+    else if (messageLower.includes('lab')) reply = mockResponses.lab;
+
+    return { reply };
+  },
+
+  // File uploads for lab tests
+  async uploadLabTestReport(labTestId, file) {
+    if (!file) throw new Error('No file provided');
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const filename = `lab-test-${labTestId}-${timestamp}-${file.name}`;
+
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('lab-test-reports')
+      .upload(filename, file);
+
+    if (error) throw error;
+
+    // Update lab test record with file path
+    const { error: updateError } = await supabase
+      .from('lab_tests')
+      .update({ 
+        report_file: filename,
+        status: 'COMPLETED',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', labTestId);
+
+    if (updateError) throw updateError;
+
+    return { filename, path: data.path };
+  },
 };
 
 export default supabase;
