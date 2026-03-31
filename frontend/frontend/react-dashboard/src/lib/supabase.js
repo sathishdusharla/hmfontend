@@ -14,6 +14,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 export const db = {
   // Users
   async loginUser(emailOrUsername, password) {
+    console.log('🔍 Attempting login with:', emailOrUsername);
+    
     // Search by email first
     let { data, error } = await supabase
       .from('users')
@@ -33,52 +35,61 @@ export const db = {
     }
 
     if (error || !data) {
-      console.error('User lookup error:', error);
+      console.error('❌ User lookup error:', error);
       throw new Error('User not found');
     }
 
+    console.log('✓ Found user:', { id: data.id, email: data.email, role: data.role });
+
     // In production, use bcrypt. For now, simple comparison
     if (data.password !== password) {
+      console.error('❌ Password mismatch');
       throw new Error('Invalid password');
     }
 
     // Get the related patient/doctor/admin record ID based on role
     let entityId = data.id; // Default to user ID
-    console.log('Looking up entity for role:', data.role, 'user_id:', data.id);
+    console.log('🔍 Looking up entity for role:', data.role, 'user_id:', data.id);
     
     if (data.role?.toUpperCase() === 'PATIENT') {
       try {
-        const { data: patientData, error } = await supabase
+        const { data: patientData, error: patientError } = await supabase
           .from('patients')
           .select('id')
           .eq('user_id', data.id);
+        
+        console.log('Patient query result:', { patientData, patientError });
+        
         if (patientData && patientData.length > 0) {
           entityId = patientData[0].id;
           console.log('✓ Found patient ID:', entityId);
         } else {
-          console.warn('✗ No patient record found for user', data.id);
+          console.warn('⚠ No patient record found for user', data.id);
         }
       } catch (err) {
-        console.warn('✗ Error finding patient:', err);
+        console.error('❌ Error finding patient:', err);
       }
     } else if (data.role?.toUpperCase() === 'DOCTOR') {
       try {
-        const { data: doctorData, error } = await supabase
+        const { data: doctorData, error: doctorError } = await supabase
           .from('doctors')
           .select('id')
           .eq('user_id', data.id);
+        
+        console.log('Doctor query result:', { doctorData, doctorError });
+        
         if (doctorData && doctorData.length > 0) {
           entityId = doctorData[0].id;
           console.log('✓ Found doctor ID:', entityId);
         } else {
-          console.warn('✗ No doctor record found for user', data.id);
+          console.warn('⚠ No doctor record found for user', data.id);
         }
       } catch (err) {
-        console.warn('✗ Error finding doctor:', err);
+        console.error('❌ Error finding doctor:', err);
       }
     }
 
-    console.log('Login successful:', { id: data.id, email: data.email, role: data.role, entityId });
+    console.log('✅ Login successful:', { userId: data.id, email: data.email, role: data.role, entityId });
 
     return {
       id: data.id,
@@ -428,18 +439,22 @@ export const db = {
   // Doctor operations
   async getDoctorDashboard(doctorId) {
     try {
+      console.log('📋 Fetching doctor dashboard for ID:', doctorId);
       const { data: doctor, error } = await supabase
         .from('doctors')
         .select('*')
         .eq('id', doctorId)
         .single();
+      
       if (error) {
-        console.warn('Error fetching doctor dashboard:', error);
+        console.error('❌ Error fetching doctor dashboard:', error);
         return {};
       }
+      
+      console.log('✓ Doctor dashboard loaded:', doctor);
       return doctor || {};
     } catch (err) {
-      console.warn('Exception fetching doctor dashboard:', err);
+      console.error('❌ Exception fetching doctor dashboard:', err);
       return {};
     }
   },
