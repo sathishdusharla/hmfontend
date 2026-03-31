@@ -169,10 +169,36 @@ export const db = {
   async getPatientAppointments(patientId) {
     const { data, error } = await supabase
       .from('appointments')
-      .select('*')
+      .select(`
+        id,
+        patient_id,
+        doctor_id,
+        hospital_id,
+        appointment_date,
+        appointment_time,
+        symptoms_or_disease,
+        status,
+        created_at,
+        doctors:doctor_id (id, full_name),
+        hospitals:hospital_id (id, name)
+      `)
       .eq('patient_id', patientId)
       .order('appointment_date', { ascending: false });
-    return data || [];
+    
+    if (error) {
+      console.warn('Error fetching patient appointments:', error);
+      return [];
+    }
+    
+    // Transform to match UI expectations
+    return (data || []).map(a => ({
+      ...a,
+      doctorName: a.doctors?.full_name,
+      hospitalName: a.hospitals?.name,
+      appointmentDateTime: a.appointment_date && a.appointment_time
+        ? new Date(`${a.appointment_date}T${a.appointment_time}`).toISOString()
+        : null
+    }));
   },
 
   async getPatientPrescriptions(patientId) {
@@ -210,6 +236,76 @@ export const db = {
       .eq('patient_id', patientId)
       .order('created_at', { ascending: false });
     return data || [];
+  },
+
+  async getPatientDashboard(patientId) {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get upcoming appointments
+      const { data: upcomingAppointments } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          appointment_date,
+          appointment_time,
+          doctors:doctor_id (full_name),
+          hospitals:hospital_id (name)
+        `)
+        .eq('patient_id', patientId)
+        .gte('appointment_date', today)
+        .order('appointment_date')
+        .limit(1);
+      
+      const nextAppointment = (upcomingAppointments || [])[0] || null;
+      
+      // Get total consultations
+      const { data: consultations } = await supabase
+        .from('consultations')
+        .select('id, diagnosis')
+        .eq('patient_id', patientId);
+      
+      // Get last prescription
+      const { data: prescriptions } = await supabase
+        .from('prescriptions')
+        .select(`
+          id,
+          date,
+          total_cost,
+          medicines:medicine_id (name)
+        `)
+        .eq('patient_id', patientId)
+        .order('date', { ascending: false })
+        .limit(1);
+      
+      const lastPrescription = (prescriptions || [])[0] || null;
+      
+      // Get pending lab tests
+      const { data: labTests } = await supabase
+        .from('lab_tests')
+        .select('id')
+        .eq('patient_id', patientId)
+        .eq('status', 'PENDING');
+      
+      return {
+        upcomingAppointment: nextAppointment ? {
+          doctorName: nextAppointment.doctors?.full_name,
+          hospitalName: nextAppointment.hospitals?.name,
+          dateTime: nextAppointment.appointment_date && nextAppointment.appointment_time
+            ? new Date(`${nextAppointment.appointment_date}T${nextAppointment.appointment_time}`).toLocaleString()
+            : 'N/A'
+        } : { doctorName: 'N/A', hospitalName: 'N/A', dateTime: 'N/A' },
+        totalConsultations: (consultations || []).length,
+        lastPrescription: lastPrescription ? {
+          medicines: lastPrescription.medicines?.name,
+          cost: lastPrescription.total_cost
+        } : null,
+        pendingLabTests: (labTests || []).length
+      };
+    } catch (err) {
+      console.error('Error fetching patient dashboard:', err);
+      return {};
+    }
   },
 
   async getPatientDashboardHistory(patientId) {
@@ -498,19 +594,62 @@ export const db = {
   async getDoctorDashboard(doctorId) {
     try {
       console.log('📋 Fetching doctor dashboard for ID:', doctorId);
-      const { data: doctor, error } = await supabase
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get doctor info
+      const { data: doctor } = await supabase
         .from('doctors')
         .select('*')
         .eq('id', doctorId)
         .single();
       
-      if (error) {
-        console.error('❌ Error fetching doctor dashboard:', error);
-        return {};
-      }
+      // Get today's appointments
+      const { data: todayAppointments } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('doctor_id', doctorId)
+        .eq('appointment_date', today);
       
-      console.log('✓ Doctor dashboard loaded:', doctor);
-      return doctor || {};
+      // Get total patients treated (all completed appointments)
+      const { data: treatedAppointments } = await supabase
+        .from('appointments')
+        .select('patient_id')
+        .eq('doctor_id', doctorId)
+        .eq('status', 'COMPLETED');
+      
+      // Get recent prescriptions
+      const { data: consultations } = await supabase
+        .from('consultations')
+        .select('id')
+        .eq('doctor_id', doctorId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      const consultationIds = (consultations || []).map(c => c.id);
+      const { data: recentPrescriptions } = await supabase
+        .from('prescriptions')
+        .select(`
+          id,
+          total_cost,
+          consultation_id,
+          consultations:consultation_id (id, diagnosis, patient_id, patients:patient_id (full_name))
+        `)
+        .in('consultation_id', consultationIds);
+      
+      const uniquePatients = new Set((treatedAppointments || []).map(a => a.patient_id));
+      
+      console.log('✓ Doctor dashboard loaded');
+      return {
+        ...doctor,
+        todaysAppointments: todayAppointments || [],
+        totalPatientsTreated: uniquePatients.size,
+        recentPrescriptions: (recentPrescriptions || []).map(p => ({
+          ...p,
+          totalCost: p.total_cost,
+          consultation: p.consultations,
+          patientName: p.consultations?.patients?.full_name
+        }))
+      };
     } catch (err) {
       console.error('❌ Exception fetching doctor dashboard:', err);
       return {};

@@ -81,7 +81,7 @@ export default function PatientDashboardPage() {
     setLoadError('');
     try {
       const [overview, appointments, prescriptions, history, labTests] = await Promise.all([
-        db.getPatient(patientId),
+        db.getPatientDashboard(patientId),
         db.getPatientAppointments(patientId),
         db.getPatientPrescriptions(patientId),
         db.getPatientDashboardHistory(patientId),
