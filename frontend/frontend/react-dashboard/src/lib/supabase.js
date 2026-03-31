@@ -521,14 +521,36 @@ export const db = {
     try {
       const { data, error } = await supabase
         .from('appointments')
-        .select('*')
+        .select(`
+          id,
+          patient_id,
+          doctor_id,
+          hospital_id,
+          appointment_date,
+          appointment_time,
+          symptoms_or_disease,
+          status,
+          created_at,
+          patients:patient_id (id, full_name),
+          hospitals:hospital_id (id, name)
+        `)
         .eq('doctor_id', doctorId)
         .order('appointment_date', { ascending: true });
       if (error) {
         console.warn('Error fetching doctor appointments:', error);
         return [];
       }
-      return data || [];
+      
+      // Transform data to match UI expectations
+      return (data || []).map(a => ({
+        ...a,
+        patientFullName: a.patients?.full_name,
+        hospitalName: a.hospitals?.name,
+        appointmentDateTime: a.appointment_date && a.appointment_time 
+          ? new Date(`${a.appointment_date}T${a.appointment_time}`).toISOString()
+          : null,
+        symptomsOrDisease: a.symptoms_or_disease
+      }));
     } catch (err) {
       console.warn('Exception fetching doctor appointments:', err);
       return [];
@@ -538,18 +560,70 @@ export const db = {
   async getDoctorTreatedToday(doctorId) {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase
+      const { data: appointments, error: apptError } = await supabase
         .from('appointments')
-        .select('*')
+        .select(`
+          id,
+          patient_id,
+          doctor_id,
+          appointment_date,
+          appointment_time,
+          status,
+          patients:patient_id (id, full_name)
+        `)
         .eq('doctor_id', doctorId)
         .eq('appointment_date', today)
         .eq('status', 'COMPLETED')
         .order('appointment_date');
-      if (error) {
-        console.warn('Error fetching treated today:', error);
+      
+      if (apptError) {
+        console.warn('Error fetching treated today:', apptError);
         return [];
       }
-      return data || [];
+
+      // Get consultations for these appointments
+      if (!appointments || appointments.length === 0) return [];
+      
+      const appointmentIds = appointments.map(a => a.id);
+      const { data: consultations, error: consError } = await supabase
+        .from('consultations')
+        .select(`
+          id,
+          appointment_id,
+          diagnosis
+        `)
+        .in('appointment_id', appointmentIds);
+      
+      if (consError) {
+        console.warn('Error fetching consultations:', consError);
+      }
+
+      // Get prescriptions to check if they exist
+      const { data: prescriptions, error: prescError } = await supabase
+        .from('prescriptions')
+        .select('id, consultation_id')
+        .in('consultation_id', (consultations || []).map(c => c.id));
+      
+      if (prescError) {
+        console.warn('Error fetching prescriptions:', prescError);
+      }
+
+      const prescriptionMap = new Set((prescriptions || []).map(p => p.consultation_id));
+
+      // Combine data
+      return (consultations || []).map(consultation => {
+        const appointment = appointments.find(a => a.id === consultation.appointment_id);
+        return {
+          appointmentId: appointment?.id,
+          consultationId: consultation.id,
+          patientName: appointment?.patients?.full_name,
+          diagnosis: consultation.diagnosis,
+          dateTime: appointment?.appointment_date && appointment?.appointment_time
+            ? new Date(`${appointment.appointment_date}T${appointment.appointment_time}`).toISOString()
+            : null,
+          hasPrescription: prescriptionMap.has(consultation.id)
+        };
+      });
     } catch (err) {
       console.warn('Exception fetching treated today:', err);
       return [];
