@@ -50,16 +50,19 @@ export default function PatientDashboardPage() {
     } catch {
       // non-critical, patients list only used for the switcher in booking form
     }
-    const entityId = Number(localStorage.getItem('meditrust_entity_id')) || 1;
+    const entityId = localStorage.getItem('meditrust_entity_id');
+    if (!entityId) {
+      setLoadError('Patient ID not found. Please log in again.');
+      return;
+    }
     setSelectedPatientId(entityId);
     await loadAll(entityId);
   }
 
   async function onPatientChange(nextPatientId) {
-    const id = Number(nextPatientId);
-    setSelectedPatientId(id);
-    if (!id) return;
-    await loadAll(id);
+    setSelectedPatientId(nextPatientId);
+    if (!nextPatientId) return;
+    await loadAll(nextPatientId);
   }
 
   async function fetchDayPatientNumber(appointmentDateTime) {

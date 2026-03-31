@@ -5,7 +5,7 @@ import { db } from '../../lib/supabase';
 
 
 export default function DoctorDashboardPage() {
-  const DOCTOR_ID = Number(localStorage.getItem('meditrust_entity_id')) || 1;
+  const DOCTOR_ID = localStorage.getItem('meditrust_entity_id');
   const [tab, setTab] = useState('overview');
   const [overview, setOverview] = useState(null);
   const [appointments, setAppointments] = useState([]);
