@@ -42,14 +42,32 @@ export const db = {
       throw new Error('Invalid password');
     }
 
-    console.log('Login successful:', { id: data.id, email: data.email, role: data.role });
+    // Get the related patient/doctor/admin record ID based on role
+    let entityId = data.id; // Default to user ID
+    if (data.role?.toUpperCase() === 'PATIENT') {
+      const { data: patientData } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('user_id', data.id)
+        .single();
+      entityId = patientData?.id || data.id;
+    } else if (data.role?.toUpperCase() === 'DOCTOR') {
+      const { data: doctorData } = await supabase
+        .from('doctors')
+        .select('id')
+        .eq('user_id', data.id)
+        .single();
+      entityId = doctorData?.id || data.id;
+    }
+
+    console.log('Login successful:', { id: data.id, email: data.email, role: data.role, entityId });
 
     return {
       id: data.id,
       email: data.email,
       name: data.name,
       role: data.role?.toUpperCase() || 'PATIENT',
-      entity_id: data.entity_id,
+      entity_id: entityId,
     };
   },
 
@@ -173,12 +191,48 @@ export const db = {
 
   // Register new user
   async registerUser(userData) {
-    const { data, error } = await supabase
+    // First create the user record
+    const { data: user, error: userError } = await supabase
       .from('users')
-      .insert([userData])
+      .insert([{
+        email: userData.email,
+        username: userData.username,
+        password: userData.password,
+        name: userData.full_name,
+        role: userData.role,
+      }])
       .select();
-    if (error) throw error;
-    return data[0];
+    
+    if (userError) throw userError;
+
+    const userId = user[0].id;
+
+    // Then create patient or doctor record based on role
+    if (userData.role?.toUpperCase() === 'PATIENT') {
+      await supabase
+        .from('patients')
+        .insert([{
+          user_id: userId,
+          full_name: userData.full_name,
+          date_of_birth: userData.date_of_birth,
+          gender: userData.gender,
+          phone: userData.phone,
+          address: userData.address,
+          hospital_id: userData.hospital_id,
+        }]);
+    } else if (userData.role?.toUpperCase() === 'DOCTOR') {
+      await supabase
+        .from('doctors')
+        .insert([{
+          user_id: userId,
+          full_name: userData.full_name,
+          hospital_id: userData.hospital_id,
+          specialization: userData.specialization,
+          license_number: userData.license_number,
+        }]);
+    }
+
+    return user[0];
   },
 
   // Admin operations
