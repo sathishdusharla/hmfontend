@@ -36,6 +36,8 @@ export default function LoginPage() {
       const user = await db.loginUser(form.username.trim().toLowerCase(), form.password);
       console.log('Login successful, user:', user);
       
+      // Set token first (required by ProtectedRoute)
+      localStorage.setItem('meditrust_token', 'authenticated');
       localStorage.setItem('meditrust_user', user.email);
       localStorage.setItem('meditrust_role', user.role);
       localStorage.setItem('meditrust_entity_id', user.entity_id ?? '');
