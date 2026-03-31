@@ -32,16 +32,29 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
+      console.log('Attempting login with:', form.username);
       const user = await db.loginUser(form.username.trim().toLowerCase(), form.password);
+      console.log('Login successful, user:', user);
+      
       localStorage.setItem('meditrust_user', user.email);
       localStorage.setItem('meditrust_role', user.role);
       localStorage.setItem('meditrust_entity_id', user.entity_id ?? '');
 
-      if (user.role === 'PATIENT') navigate('/patient');
-      else if (user.role === 'DOCTOR') navigate('/doctor');
-      else if (user.role === 'ADMIN') navigate('/admin');
-      else setError('Unknown role: ' + user.role);
+      console.log('Navigating based on role:', user.role);
+      if (user.role === 'PATIENT') {
+        console.log('Navigating to /patient');
+        navigate('/patient');
+      } else if (user.role === 'DOCTOR') {
+        console.log('Navigating to /doctor');
+        navigate('/doctor');
+      } else if (user.role === 'ADMIN') {
+        console.log('Navigating to /admin');
+        navigate('/admin');
+      } else {
+        setError('Unknown role: ' + user.role);
+      }
     } catch (err) {
+      console.error('Login error:', err);
       setError(err?.message || 'Login failed. Check email and password.');
     } finally {
       setLoading(false);

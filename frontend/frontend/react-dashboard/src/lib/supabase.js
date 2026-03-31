@@ -13,14 +13,27 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // Helper functions for common operations
 export const db = {
   // Users
-  async loginUser(email, password) {
-    const { data, error } = await supabase
+  async loginUser(emailOrUsername, password) {
+    // Search by email first
+    let { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email)
+      .eq('email', emailOrUsername)
       .single();
 
+    if (!data && !error) {
+      // Try searching by username if email not found
+      const result = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', emailOrUsername)
+        .single();
+      data = result.data;
+      error = result.error;
+    }
+
     if (error || !data) {
+      console.error('User lookup error:', error);
       throw new Error('User not found');
     }
 
@@ -29,11 +42,13 @@ export const db = {
       throw new Error('Invalid password');
     }
 
+    console.log('Login successful:', { id: data.id, email: data.email, role: data.role });
+
     return {
       id: data.id,
       email: data.email,
       name: data.name,
-      role: data.role,
+      role: data.role?.toUpperCase() || 'PATIENT',
       entity_id: data.entity_id,
     };
   },
