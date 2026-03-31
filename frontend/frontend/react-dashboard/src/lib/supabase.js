@@ -45,19 +45,35 @@ export const db = {
     // Get the related patient/doctor/admin record ID based on role
     let entityId = data.id; // Default to user ID
     if (data.role?.toUpperCase() === 'PATIENT') {
-      const { data: patientData } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('user_id', data.id)
-        .single();
-      entityId = patientData?.id || data.id;
+      try {
+        const { data: patientData, error } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('user_id', data.id)
+          .single();
+        if (patientData?.id) {
+          entityId = patientData.id;
+        } else {
+          console.warn('No patient record found for user', data.id);
+        }
+      } catch (err) {
+        console.warn('Error finding patient:', err);
+      }
     } else if (data.role?.toUpperCase() === 'DOCTOR') {
-      const { data: doctorData } = await supabase
-        .from('doctors')
-        .select('id')
-        .eq('user_id', data.id)
-        .single();
-      entityId = doctorData?.id || data.id;
+      try {
+        const { data: doctorData, error } = await supabase
+          .from('doctors')
+          .select('id')
+          .eq('user_id', data.id)
+          .single();
+        if (doctorData?.id) {
+          entityId = doctorData.id;
+        } else {
+          console.warn('No doctor record found for user', data.id);
+        }
+      } catch (err) {
+        console.warn('Error finding doctor:', err);
+      }
     }
 
     console.log('Login successful:', { id: data.id, email: data.email, role: data.role, entityId });
@@ -409,46 +425,80 @@ export const db = {
 
   // Doctor operations
   async getDoctorDashboard(doctorId) {
-    const { data: doctor, error } = await supabase
-      .from('doctors')
-      .select('*')
-      .eq('id', doctorId)
-      .single();
-    return doctor || {};
+    try {
+      const { data: doctor, error } = await supabase
+        .from('doctors')
+        .select('*')
+        .eq('id', doctorId)
+        .single();
+      if (error) {
+        console.warn('Error fetching doctor dashboard:', error);
+        return {};
+      }
+      return doctor || {};
+    } catch (err) {
+      console.warn('Exception fetching doctor dashboard:', err);
+      return {};
+    }
   },
 
   async getDoctorAppointments(doctorId) {
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('doctor_id', doctorId)
-      .order('appointment_date', { ascending: true });
-    return data || [];
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .order('appointment_date', { ascending: true });
+      if (error) {
+        console.warn('Error fetching doctor appointments:', error);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.warn('Exception fetching doctor appointments:', err);
+      return [];
+    }
   },
 
   async getDoctorTreatedToday(doctorId) {
-    // Get appointments treated today
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('doctor_id', doctorId)
-      .eq('appointment_date', today)
-      .eq('status', 'COMPLETED')
-      .order('appointment_date');
-    return data || [];
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .eq('appointment_date', today)
+        .eq('status', 'COMPLETED')
+        .order('appointment_date');
+      if (error) {
+        console.warn('Error fetching treated today:', error);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.warn('Exception fetching treated today:', err);
+      return [];
+    }
   },
 
   async getDoctorEligibleConsultations(doctorId) {
-    // Get consultations where diagnosis hasn't been set/completed
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('doctor_id', doctorId)
-      .eq('status', 'COMPLETED')
-      .is('diagnosis', null)
-      .order('appointment_date', { ascending: false });
-    return data || [];
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .eq('status', 'COMPLETED')
+        .is('diagnosis', null)
+        .order('appointment_date', { ascending: false });
+      if (error) {
+        console.warn('Error fetching eligible consultations:', error);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.warn('Exception fetching eligible consultations:', err);
+      return [];
+    }
   },
 
   async getPatientDetailsForDoctor(patientId) {
