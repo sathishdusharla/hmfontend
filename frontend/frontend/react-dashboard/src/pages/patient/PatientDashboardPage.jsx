@@ -373,10 +373,10 @@ export default function PatientDashboardPage() {
                   {(prescriptions || []).map((p) => (
                     <tr key={p.id} className="border-t">
                       <td className="py-2 pr-4 font-mono text-xs">#{p.id}</td>
-                      <td className="py-2 pr-4 text-slate-500">{p.consultation?.dateTime ? new Date(p.consultation.dateTime).toLocaleDateString() : '—'}</td>
-                      <td className="py-2 pr-4">{(p.medicines || []).map((m) => m.name).join(', ') || '—'}</td>
+                      <td className="py-2 pr-4 text-slate-500">{p.date ? new Date(p.date).toLocaleDateString() : '—'}</td>
+                      <td className="py-2 pr-4">{p.medicines?.name || '—'}</td>
                       <td className="py-2 pr-4 text-slate-500">{p.notes || '—'}</td>
-                      <td className="py-2 font-semibold">₹{p.totalCost ?? '—'}</td>
+                      <td className="py-2 font-semibold">₹{p.total_cost ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

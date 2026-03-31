@@ -178,9 +178,28 @@ export const db = {
   async getPatientPrescriptions(patientId) {
     const { data, error } = await supabase
       .from('prescriptions')
-      .select('*')
+      .select(`
+        id,
+        date,
+        notes,
+        total_cost,
+        created_at,
+        medicine_id,
+        medicines:medicine_id (
+          id,
+          name,
+          description,
+          dosage
+        )
+      `)
       .eq('patient_id', patientId)
-      .order('created_at', { ascending: false });
+      .order('date', { ascending: false });
+    
+    if (error) {
+      console.error('❌ Error fetching prescriptions:', error);
+      return [];
+    }
+    
     return data || [];
   },
 
