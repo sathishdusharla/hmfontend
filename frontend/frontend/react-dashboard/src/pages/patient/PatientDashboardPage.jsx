@@ -316,8 +316,27 @@ export default function PatientDashboardPage() {
           {appointmentError && <div className="md:col-span-2 text-sm text-red-600">{appointmentError}</div>}
           {appointmentSuccess && <div className="md:col-span-2 text-sm text-green-700">{appointmentSuccess}</div>}
           <div className="md:col-span-2">
-            <button className="btn-primary" type="submit" disabled={isSubmittingAppointment || !selectedPatientId}>
-              {isSubmittingAppointment ? 'Submitting...' : 'Submit Appointment Request'}
+            <button 
+              className="w-full py-3 px-6 rounded-lg font-semibold text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center gap-2" 
+              type="submit" 
+              disabled={isSubmittingAppointment || !selectedPatientId}
+            >
+              {isSubmittingAppointment ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" opacity="0.25" />
+                    <path d="M12 2a10 10 0 010 20" opacity="1" />
+                  </svg>
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m0-0h-6" />
+                  </svg>
+                  <span>Submit Appointment Request</span>
+                </>
+              )}
             </button>
           </div>
         </form>
