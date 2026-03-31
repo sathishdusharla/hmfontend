@@ -44,35 +44,37 @@ export const db = {
 
     // Get the related patient/doctor/admin record ID based on role
     let entityId = data.id; // Default to user ID
+    console.log('Looking up entity for role:', data.role, 'user_id:', data.id);
+    
     if (data.role?.toUpperCase() === 'PATIENT') {
       try {
         const { data: patientData, error } = await supabase
           .from('patients')
           .select('id')
-          .eq('user_id', data.id)
-          .single();
-        if (patientData?.id) {
-          entityId = patientData.id;
+          .eq('user_id', data.id);
+        if (patientData && patientData.length > 0) {
+          entityId = patientData[0].id;
+          console.log('✓ Found patient ID:', entityId);
         } else {
-          console.warn('No patient record found for user', data.id);
+          console.warn('✗ No patient record found for user', data.id);
         }
       } catch (err) {
-        console.warn('Error finding patient:', err);
+        console.warn('✗ Error finding patient:', err);
       }
     } else if (data.role?.toUpperCase() === 'DOCTOR') {
       try {
         const { data: doctorData, error } = await supabase
           .from('doctors')
           .select('id')
-          .eq('user_id', data.id)
-          .single();
-        if (doctorData?.id) {
-          entityId = doctorData.id;
+          .eq('user_id', data.id);
+        if (doctorData && doctorData.length > 0) {
+          entityId = doctorData[0].id;
+          console.log('✓ Found doctor ID:', entityId);
         } else {
-          console.warn('No doctor record found for user', data.id);
+          console.warn('✗ No doctor record found for user', data.id);
         }
       } catch (err) {
-        console.warn('Error finding doctor:', err);
+        console.warn('✗ Error finding doctor:', err);
       }
     }
 
