@@ -1,0 +1,14 @@
+{
+  "name": "meditrust-frontend",
+  "version": "1.0.0",
+  "description": "MediTrust frontend workspace entrypoint",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix react-dashboard run dev",
+    "build": "npm --prefix react-dashboard run build",
+    "preview": "npm --prefix react-dashboard run preview"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
